@@ -37,15 +37,20 @@ async def select(sql, args, size=None):
         return rs
 
 
-async def execute(sql, args):
+async def execute(sql, args, autocommit=True):
     log(sql)
-    with (await __pool) as conn:
+    async with __pool.get() as conn:
+        if not autocommit:
+            await conn.begin()
         try:
-            cur = await conn.cursor()
-            await cur.execute(sql.replace('?', '%s'), args)
-            affected = cur.rowcount
-            await cur.close()
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute(sql.replace('?', '%s'), args)
+                affected = cur.rowcount
+            if not autocommit:
+                await conn.commit()
         except BaseException as e:
+            if not autocommit:
+                await conn.rollback()
             raise
         return affected
 
@@ -137,7 +142,7 @@ class ModelMetaclass(type):
         attrs['__select__'] = 'select `%s`, %s from `%s`' % (primaryKey, ','.join(escaped_fields), tableName)
         attrs['__insert__'] = 'insert into `%s` (%s , `%s`) values (%s)' % (tableName, ','.join(escaped_fields), primaryKey,
                                                                             create_args_string(len(escaped_fields) + 1))
-        attrs['__uodate__'] = 'update `%s` set %s where `%s` = ?' % (tableName, ','.join(map(lambda f: '`%s` = ?' % (mappings.get(f).name or f), fields)),primaryKey)
+        attrs['__update__'] = 'update `%s` set %s where `%s` = ?' % (tableName, ','.join(map(lambda f: '`%s` = ?' % (mappings.get(f).name or f), fields)),primaryKey)
         attrs['__delete__'] = 'delete from `%s` where `%s` = ?' % (tableName, primaryKey)
         return type.__new__(cls, name, bases, attrs)
 
