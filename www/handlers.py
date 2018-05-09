@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import re, time, json, logging, hashlib, base64, asyncio
 
 import markdown2
@@ -10,6 +13,16 @@ from apis import APIValueError, APIResourceNotFoundError
 from models import User, Comment, Blog, next_id
 from config import configs
 
+COOKIE_NAME = 'awesession'
+_COOKIE_KEY = configs.session.secret
+
+
+def user2cookie(user, max_age):
+    expires = str(int(time.time() + max_age))
+    s = '%s-%s-%s-%s' % (user.id, user.passwd, expires, _COOKIE_KEY)
+    L = [user.id, expires, hashlib.sha1(s.encode('utf-8')).hexdigest()]
+    return '-'.join(L)
+
 
 @get('/')
 async def index(request):
@@ -19,12 +32,18 @@ async def index(request):
         Blog(id='2', name='Something New', summary=summary, created_at=time.time()-3600),
         Blog(id='3', name='Learn Swift', summary=summary, created_at=time.time()-7200)
     ]
-    users = await User.findAll()
+    #users = await User.findAll()
     return {
         '__template__':'blog.html',
         'blogs':blogs
     }
 
+
+@get('/register')
+def register():
+    return {
+        '__template__' : 'register.html'
+    }
 
 @get('/api/users')
 async def api_get_users():
@@ -49,5 +68,14 @@ async def api_register_user(*, email, name, passwd):
     if len(users) > 0:
         raise APIValueError('register:failed', 'email', 'email is already in use.')
     uid = next_id()
+    sha1_passwd = '%s:%s'%(uid, passwd)
+    user = User(id = uid, name = name.strip(), email = email, passwd = hashlib.sha1(sha1_passwd.encode('utf-8')).hexdigest(),image = 'http://www.gravatar.com/avatar/%s?d=mm&s=120' % hashlib.md5(email.encode('utf-8')).hexdigest())
+    await user.save()
+    r = web.Response()
+    r.set_cookie(COOKIE_NAME, user2cookie(user, 86400), max_age=86400, httponly=True)
+    user.passwd = '******'
+    r.content_type = 'application/json'
+    r.body = json.dumps(user, ensure_ascii=False).encode('utf-8')
+    return r
 
 

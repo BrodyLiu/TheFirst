@@ -20,9 +20,9 @@ class Dict(dict):
         self[key] = value
 
 
-def merge(defalts, override):
+def merge(defaults, override):
     r = {}
-    for k,v in defalts.items():
+    for k,v in defaults.items():
         if k in override:
             if isinstance(v, dict):
                 r[k] = merge(v, override[k])
@@ -46,4 +46,6 @@ try:
     configs = merge(configs, config_override.configs)
 except ImportError:
     pass
+
+configs = toDict(configs)
 
