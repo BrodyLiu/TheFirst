@@ -1,4 +1,4 @@
-import config_defalt
+import config_default
 
 
 class Dict(dict):
@@ -40,7 +40,7 @@ def toDict(d):
     return D
 
 
-configs = config_defalt.configs
+configs = config_default.configs
 try:
     import config_override
     configs = merge(configs, config_override.configs)
